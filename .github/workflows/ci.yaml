@@ -20,8 +20,8 @@ jobs:
         with:
           command: install --optimize-autoloader --prefer-dist
 
-      - name: Install PHP dependencies
-        run: composer install --no-interaction --no-suggest
+#      - name: Install PHP dependencies
+#        run: composer install --no-interaction --no-suggest
 
       - name: PHPStan
         run: vendor/bin/phpstan analyse
