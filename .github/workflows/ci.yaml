@@ -1,0 +1,20 @@
+name: CI
+
+on: [push]
+
+jobs:
+  test:
+    container:
+      image: thecodingmachine/php:7.1-v1-cli
+
+    steps:
+      - uses: actions/checkout@v1
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-suggest
+
+      - name: PHPStan
+        run: vendor/bin/phpstan analyse
+
+      - name: Tester
+        run: vendor/bin/tester tests/unit
