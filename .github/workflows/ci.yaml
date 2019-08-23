@@ -17,8 +17,8 @@ jobs:
 
       - name: Install PHP dependencies Alt
         uses: pxgamer/composer-action@master
-          with:
-            command: install --optimize-autoloader --prefer-dist
+        with:
+          command: install --optimize-autoloader --prefer-dist
 
       - name: Install PHP dependencies
         run: composer install --no-interaction --no-suggest
