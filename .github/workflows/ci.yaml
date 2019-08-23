@@ -4,6 +4,8 @@ on: [push]
 
 jobs:
   test:
+    runs-on: ubuntu-latest
+
     container:
       image: thecodingmachine/php:7.1-v1-cli
 
