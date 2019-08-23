@@ -12,6 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v1
 
+      - name: Debug
+        run: pwd && ls -lA
+
       - name: Install PHP dependencies
         run: composer install --no-interaction --no-suggest
 
