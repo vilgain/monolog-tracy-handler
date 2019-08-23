@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: thecodingmachine/php:7.1-v1-cli
+      image: thecodingmachine/php:7.1-v2-cli
 
     steps:
       - uses: actions/checkout@v1
