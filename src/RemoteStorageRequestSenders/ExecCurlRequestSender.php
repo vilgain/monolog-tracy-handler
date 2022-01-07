@@ -11,13 +11,16 @@ class ExecCurlRequestSender implements RemoteStorageRequestSender
 
 	private bool $async;
 
+	/** @var bool */
+	private $truncate;
 
-	public function __construct(string $curlBinary = 'curl', ?bool $async = null)
+
+	public function __construct(string $curlBinary = 'curl', ?bool $async = null, bool $truncate = false)
 	{
 		$this->curlBinary = $curlBinary;
 		$this->async = $async ?? (PHP_SAPI !== 'cli');
+		$this->truncate = $truncate;
 	}
-
 
 	/**
 	 * @param array<string, string> $headers
@@ -43,7 +46,18 @@ class ExecCurlRequestSender implements RemoteStorageRequestSender
 		$escapedArgs = array_map('escapeshellarg', $args);
 		$asyncMarker = $this->async ? ' &' : '';
 
-		$command = implode(' ', $escapedArgs) . ' >/dev/null 2>&1' . $asyncMarker;
+		$commands = [];
+		$commands[] = implode(' ', $escapedArgs);
+		if ($this->truncate) {
+			$commands[] = implode(' ', array_map('escapeshellarg', [
+				'truncate',
+				'-s',
+				0,
+				$bodyFilePath,
+			]));
+		}
+
+		$command = sprintf('(%s)', implode(';', $commands)) . ' >/dev/null 2>&1' . $asyncMarker;
 		exec($command, $output, $exitCode);
 
 		return $exitCode === 0;
