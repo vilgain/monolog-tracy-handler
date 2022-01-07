@@ -17,7 +17,8 @@ class AwsS3RemoteStorageDriver implements RemoteStorageDriver
 		private string $prefix,
 		private string $accessKeyId,
 		private string $secretKey,
-		private RemoteStorageRequestSender $requestSender
+		private RemoteStorageRequestSender $requestSender,
+		private ?string $securityToken = null,
 	) {
 	}
 
@@ -45,6 +46,9 @@ class AwsS3RemoteStorageDriver implements RemoteStorageDriver
 			'X-Amz-Content-Sha256' => self::UNSIGNED_PAYLOAD_HASH,
 			'X-Amz-Date' => Clock::now()->format('Ymd\THis\Z'),
 		];
+		if ($this->securityToken) {
+			$headers['X-Amz-Security-Token'] = $this->securityToken;
+		}
 
 		$headers['Authorization'] = $this->getAuthorizationHeader($method, $path, $headers, self::UNSIGNED_PAYLOAD_HASH);
 		$headers['Content-Type'] = 'text/html; charset=utf-8'; // cannot be included in the Authorization signature
