@@ -2,6 +2,7 @@
 
 namespace Mangoweb\MonologTracyHandler\RemoteStorageDrivers;
 
+use Aws\Credentials\CredentialsInterface;
 use Mangoweb\Clock\Clock;
 use Mangoweb\MonologTracyHandler\RemoteStorageDriver;
 use Mangoweb\MonologTracyHandler\RemoteStorageRequestSender;
@@ -15,27 +16,35 @@ class AwsS3RemoteStorageDriver implements RemoteStorageDriver
 		private string $region,
 		private string $bucket,
 		private string $prefix,
-		private string $accessKeyId,
-		private string $secretKey,
+		/**
+		 * @var callable
+		 */
+		private $credentialProvider,
 		private RemoteStorageRequestSender $requestSender,
-		private ?string $securityToken = null,
 	) {
+	}
+
+	private function getCredentials(): CredentialsInterface
+	{
+		$fn = $this->credentialProvider;
+		return $fn()->wait();
 	}
 
 
 	public function getUrl(string $localName): string
 	{
 		$host = $this->getUrlHost();
-		$path = $this->getUrlPath($localName);
+		$path = $this->getUrlPath($localName, $this->getCredentials());
 		return "https://{$host}{$path}";
 	}
 
 
 	public function upload(string $localPath): bool
 	{
+		$credentials = $this->getCredentials();
 		$localName = basename($localPath);
 		$url = $this->getUrl($localName);
-		$path = $this->getUrlPath($localName);
+		$path = $this->getUrlPath($localName, $credentials);
 
 		$method = 'PUT';
 
@@ -46,11 +55,11 @@ class AwsS3RemoteStorageDriver implements RemoteStorageDriver
 			'X-Amz-Content-Sha256' => self::UNSIGNED_PAYLOAD_HASH,
 			'X-Amz-Date' => Clock::now()->format('Ymd\THis\Z'),
 		];
-		if ($this->securityToken) {
-			$headers['X-Amz-Security-Token'] = $this->securityToken;
+		if ($securityToken = $credentials->getSecurityToken()) {
+			$headers['X-Amz-Security-Token'] = $securityToken;
 		}
 
-		$headers['Authorization'] = $this->getAuthorizationHeader($method, $path, $headers, self::UNSIGNED_PAYLOAD_HASH);
+		$headers['Authorization'] = $this->getAuthorizationHeader($method, $path, $headers, self::UNSIGNED_PAYLOAD_HASH, $credentials);
 		$headers['Content-Type'] = 'text/html; charset=utf-8'; // cannot be included in the Authorization signature
 
 		try {
@@ -68,9 +77,9 @@ class AwsS3RemoteStorageDriver implements RemoteStorageDriver
 	}
 
 
-	private function getUrlPath(string $localName): string
+	private function getUrlPath(string $localName, CredentialsInterface $credentials): string
 	{
-		$hash = hash_hmac('md5', $localName, $this->secretKey);
+		$hash = hash_hmac('md5', $localName, $credentials->getSecretKey());
 		$prefix = ltrim($this->prefix, '/');
 		return "/{$this->bucket}/{$prefix}{$hash}.html";
 	}
@@ -79,17 +88,17 @@ class AwsS3RemoteStorageDriver implements RemoteStorageDriver
 	/**
 	 * @param array<string, string> $headers
 	 */
-	private function getAuthorizationHeader(string $method, string $path, array $headers, string $payloadHash): string
+	private function getAuthorizationHeader(string $method, string $path, array $headers, string $payloadHash, CredentialsInterface $credentials): string
 	{
 		$credentialScope = sprintf('%s/%s/s3/aws4_request', Clock::now()->format('Ymd'), $this->region);
 		$canonicalRequest = $this->getCanonicalRequest($method, $path, $headers, $payloadHash);
 		$stringToSign = $this->getStringToSign($credentialScope, $canonicalRequest);
-		$signingKey = $this->getSigningKey();
+		$signingKey = $this->getSigningKey($credentials);
 		$signature = hash_hmac('sha256', $stringToSign, $signingKey);
 
 		return sprintf(
 			'AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s',
-			$this->accessKeyId,
+			$credentials->getAccessKeyId(),
 			$credentialScope,
 			$this->getSignedHeaderNames($headers),
 			$signature
@@ -145,9 +154,9 @@ class AwsS3RemoteStorageDriver implements RemoteStorageDriver
 	}
 
 
-	private function getSigningKey(): string
+	private function getSigningKey(CredentialsInterface $credentials): string
 	{
-		$dateKey = hash_hmac('sha256', Clock::now()->format('Ymd'), "AWS4{$this->secretKey}", true);
+		$dateKey = hash_hmac('sha256', Clock::now()->format('Ymd'), "AWS4{$credentials->getSecretKey()}", true);
 		$regionKey = hash_hmac('sha256', $this->region, $dateKey, true);
 		$serviceKey = hash_hmac('sha256', 's3', $regionKey, true);
 		return hash_hmac('sha256', 'aws4_request', $serviceKey, true);
